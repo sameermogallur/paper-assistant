@@ -138,6 +138,38 @@ class TruthinessResult(BaseModel):
     grade: str
     disclaimer: str = "This is a heuristic analysis, not peer review"
 
+class IntegrityReport(BaseModel):
+    """Complete paper analysis - single endpoint response"""
+    # PDF metadata
+    pages: int
+    word_count: int
+    sections_detected: List[str]
+    extraction_method: str
+    
+    # Citation verification summary
+    references_found: int
+    references_verified: int
+    references_suspicious: int
+    references_not_found: int
+    citations: List[Citation]
+    
+    # Statistics analysis
+    statistics: StatisticsResult
+    
+    # Integrity scoring
+    integrity_score: int = Field(ge=0, le=100)
+    integrity_grade: str
+    integrity_signals: List[str]
+    
+    # In-text citations
+    intext_total: int
+    intext_numeric: int
+    intext_author_year: int
+    
+    # Meta
+    analyzed_at: str
+    disclaimer: str = "This is an automated heuristic analysis, not peer review."
+
 class HealthResponse(BaseModel):
     """Health check response"""
     status: str
@@ -793,6 +825,122 @@ async def calculate_truthiness(body: TextBody, field: Optional[str] = Query(None
         reasons=reasons,
         grade=grade,
         disclaimer="This is a heuristic analysis, not peer review. Use as a preliminary signal only."
+    )
+
+@app.post("/api/analyze_pdf", response_model=IntegrityReport)
+async def analyze_pdf(request: Request, file: UploadFile = File(...)):
+    """Complete paper analysis in one call - returns IntegrityReport"""
+    
+    # --- PDF Validation (copied from parse_pdf) ---
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(400, "File must be a PDF")
+    
+    contents = await file.read()
+    
+    if not contents.startswith(b"%PDF"):
+        raise HTTPException(400, "Invalid PDF file")
+    
+    if len(contents) > MAX_PDF_SIZE:
+        raise HTTPException(400, f"PDF too large. Max: {MAX_PDF_SIZE/1024/1024:.1f}MB")
+    
+    # --- PDF Parsing ---
+    try:
+        pdf_file = io.BytesIO(contents)
+        pdf_reader = pypdf.PdfReader(pdf_file)
+        
+        if len(pdf_reader.pages) > MAX_PDF_PAGES:
+            raise HTTPException(400, f"Too many pages. Max: {MAX_PDF_PAGES}")
+        
+        num_pages = len(pdf_reader.pages)
+        full_text = ""
+        for i, page in enumerate(pdf_reader.pages):
+            try:
+                text = page.extract_text()
+                if text:
+                    full_text += text + "\n"
+            except Exception as e:
+                logger.warning(f"Failed to extract page {i+1}: {e}")
+                continue
+        
+        sections = detect_sections(full_text)
+        word_count = len(full_text.split())
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PDF parsing error: {e}")
+        raise HTTPException(500, "Failed to process PDF")
+    
+    # --- Handle OCR-needed case ---
+    if len(full_text) < 100:
+        return IntegrityReport(
+            pages=num_pages,
+            word_count=0,
+            sections_detected=[],
+            extraction_method="failed_needs_ocr",
+            references_found=0,
+            references_verified=0,
+            references_suspicious=0,
+            references_not_found=0,
+            citations=[],
+            statistics=StatisticsResult(
+                p_values=[],
+                sample_sizes=[],
+                effect_sizes=[],
+                cis=[],
+                red_flags=[],
+                summary="OCR required - no text extracted"
+            ),
+            integrity_score=0,
+            integrity_grade="N/A",
+            integrity_signals=["OCR required - text extraction failed"],
+            intext_total=0,
+            intext_numeric=0,
+            intext_author_year=0,
+            analyzed_at=datetime.utcnow().isoformat(),
+            disclaimer="This is an automated heuristic analysis, not peer review."
+        )
+    
+    # --- Run all analysis ---
+    text_body = TextBody(text=full_text)
+    
+    # Citation verification
+    citations = await verify_references(request, text_body)
+    
+    # Count by status (use actual status strings from Citation model)
+    verified_count = sum(1 for c in citations if c.status == "verified")
+    suspicious_count = sum(1 for c in citations if c.status == "suspicious")
+    not_found_count = sum(1 for c in citations if c.status == "not_found")
+    
+    # Statistics extraction
+    stats = await extract_statistics(text_body)
+    
+    # Truthiness scoring
+    truthiness = await calculate_truthiness(text_body)
+    
+    # In-text citations
+    intext = await find_intext_citations(text_body)
+    
+    # --- Build response ---
+    return IntegrityReport(
+        pages=num_pages,
+        word_count=word_count,
+        sections_detected=list(sections.keys()),
+        extraction_method="native",
+        references_found=len(citations),
+        references_verified=verified_count,
+        references_suspicious=suspicious_count,
+        references_not_found=not_found_count,
+        citations=citations,
+        statistics=stats,
+        integrity_score=truthiness.score,
+        integrity_grade=truthiness.grade,
+        integrity_signals=truthiness.reasons,
+        intext_total=intext.total_count,
+        intext_numeric=len(intext.numeric),
+        intext_author_year=len(intext.author_year),
+        analyzed_at=datetime.utcnow().isoformat(),
+        disclaimer="This is an automated heuristic analysis, not peer review."
     )
 
 if __name__ == "__main__":
