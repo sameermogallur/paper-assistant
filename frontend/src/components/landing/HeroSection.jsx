@@ -59,8 +59,8 @@ export default function HeroSection({ onGetStarted }) {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-xl md:text-2xl text-slate-600 max-w-2xl mx-auto mb-12 leading-relaxed"
         >
-          AIRA analyzes research papers and news articles in seconds — verifying sources, 
-          detecting bias, checking facts, and scoring content quality.
+          AIRA analyzes research papers in seconds — verifying citations, extracting statistics, 
+          and scoring research integrity.
         </motion.p>
 
         {/* CTA Buttons */}
@@ -82,6 +82,7 @@ export default function HeroSection({ onGetStarted }) {
             variant="outline"
             size="lg"
             className="h-14 px-8 text-lg border-slate-200 hover:bg-slate-50"
+            onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
           >
             See How It Works
           </Button>
@@ -100,7 +101,7 @@ export default function HeroSection({ onGetStarted }) {
           </div>
           <div className="flex items-center gap-2">
             <FileSearch className="w-5 h-5 text-indigo-500" />
-            <span className="text-sm">PDFs & URLs</span>
+            <span className="text-sm">PDF Analysis</span>
           </div>
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-violet-500" />

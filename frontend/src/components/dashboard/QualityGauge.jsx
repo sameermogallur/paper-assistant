@@ -92,6 +92,15 @@ export default function QualityGauge({ score = 0, grade = 'C', breakdown = [] })
         </div>
       </div>
 
+      {/* Disclaimer */}
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mt-6">
+        <p className="text-sm text-blue-800 text-center">
+          <strong>What this score measures:</strong> Transparency and reporting practices 
+          (ethics statements, limitations, conflicts of interest, data availability). 
+          This is not a measure of research validity or correctness.
+        </p>
+      </div>
+
       {/* Breakdown */}
       {breakdown.length > 0 && (
         <div className="space-y-3">

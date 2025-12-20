@@ -13,6 +13,89 @@ import AnalysisTabs from "@/components/dashboard/AnalysisTabs";
 import NewsAnalysisTabs from "@/components/dashboard/NewsAnalysisTabs";
 import { airaApi } from '../api/airaApi';
 
+function generateScoreBreakdown(result) {
+  const breakdown = [];
+
+  const signals = result.integrity_signals || [];
+  
+  // Citations Verified
+  const citationScore = result.references_found > 0 
+    ? Math.round((result.references_verified / result.references_found) * 20) 
+    : 0;
+  breakdown.push({
+    criterion: 'Citations Verified',
+    score: citationScore,
+    maxScore: 20,
+    status: citationScore >= 16 ? 'pass' : citationScore >= 10 ? 'partial' : 'fail'
+  });
+  
+  // Statistical Reporting
+  const hasStats = result.statistics && result.statistics.p_values && result.statistics.p_values.length > 0;
+  const statScore = hasStats ? 12 : 5;
+  breakdown.push({
+    criterion: 'Statistical Reporting',
+    score: statScore,
+    maxScore: 15,
+    status: hasStats ? 'pass' : 'partial'
+  });
+  
+  // Limitations Section
+  const hasLimitations = !signals.some(s => s.toLowerCase().includes('no limitations'));
+  breakdown.push({
+    criterion: 'Limitations Discussed',
+    score: hasLimitations ? 10 : 0,
+    maxScore: 10,
+    status: hasLimitations ? 'pass' : 'fail'
+  });
+  
+  // Ethics Statement
+  const hasEthics = !signals.some(s => s.toLowerCase().includes('no ethics'));
+  breakdown.push({
+    criterion: 'Ethics Statement',
+    score: hasEthics ? 10 : 0,
+    maxScore: 10,
+    status: hasEthics ? 'pass' : 'fail'
+  });
+  
+  // Conflict of Interest
+  const hasCOI = !signals.some(s => s.toLowerCase().includes('conflict of interest'));
+  breakdown.push({
+    criterion: 'Conflict of Interest Disclosed',
+    score: hasCOI ? 10 : 0,
+    maxScore: 10,
+    status: hasCOI ? 'pass' : 'fail'
+  });
+  
+  // Pre-registration (bonus)
+  const hasPreReg = signals.some(s => s.toLowerCase().includes('pre-registered'));
+  breakdown.push({
+    criterion: 'Pre-registration',
+    score: hasPreReg ? 10 : 0,
+    maxScore: 10,
+    status: hasPreReg ? 'pass' : 'partial'
+  });
+  
+  // Open Data (bonus)
+  const hasOpenData = signals.some(s => s.toLowerCase().includes('open data') || s.toLowerCase().includes('data/code'));
+  breakdown.push({
+    criterion: 'Open Data/Code',
+    score: hasOpenData ? 10 : 0,
+    maxScore: 10,
+    status: hasOpenData ? 'pass' : 'partial'
+  });
+  
+  // Replication
+  const hasReplication = signals.some(s => s.toLowerCase().includes('replication'));
+  breakdown.push({
+    criterion: 'Replication Discussed',
+    score: hasReplication ? 5 : 0,
+    maxScore: 5,
+    status: hasReplication ? 'pass' : 'partial'
+  });
+  
+  return breakdown;
+}
+
 export default function Home() {
   const [view, setView] = useState('landing');
   const [inputType, setInputType] = useState('pdf');
@@ -67,15 +150,35 @@ export default function Home() {
             verified: c.status === 'verified',
             confidence: c.confidence
           })),
-          statistics: analysisResult.statistics.p_values.map(p => ({
-            type: 'p-value',
-            value: p,
-            context: 'Extracted from paper',
-            flag: null
-          })),
+          statistics: [
+            ...analysisResult.statistics.p_values.map(p => ({
+              type: 'p-value',
+              value: p,
+              context: p.includes('0.05') || p.includes('0.04') ? 'Near significance threshold' : null,
+              flag: (p.includes('0.05') || p.includes('0.04') || p.includes('0.06')) ? 'Borderline significance' : null
+            })),
+            ...analysisResult.statistics.sample_sizes.map(n => ({
+              type: 'sample_size',
+              value: n,
+              context: null,
+              flag: parseInt(n.match(/\d+/)?.[0] || '0') < 30 ? 'Small sample' : null
+            })),
+            ...analysisResult.statistics.effect_sizes.map(e => ({
+              type: 'effect_size',
+              value: e,
+              context: null,
+              flag: null
+            })),
+            ...analysisResult.statistics.cis.map(ci => ({
+              type: 'confidence_interval',
+              value: ci,
+              context: null,
+              flag: null
+            }))
+          ],
           red_flags: analysisResult.statistics.red_flags.filter(f => !f.startsWith('✅')),
           good_practices: analysisResult.statistics.red_flags.filter(f => f.startsWith('✅')),
-          score_breakdown: [],
+          score_breakdown: generateScoreBreakdown(analysisResult),
           summary: {
             key_findings: [
               analysisResult.references_verified + ' of ' + analysisResult.references_found + ' citations verified',
@@ -432,6 +535,28 @@ export default function Home() {
             exit={{ opacity: 0 }}
           >
             <ContentHeader content={content} onBack={handleBackToUpload} />
+            <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end">
+              <button
+                onClick={() => {
+                  const dataStr = JSON.stringify(content, null, 2);
+                  const blob = new Blob([dataStr], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `${content.title || 'analysis'}-report.json`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download Report
+              </button>
+            </div>
             <div className="max-w-6xl mx-auto px-6 py-8">
               {isNews ? (
                 <NewsAnalysisTabs content={content} />

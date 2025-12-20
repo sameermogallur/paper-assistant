@@ -20,7 +20,7 @@ export default function WaitlistSection() {
   };
 
   return (
-    <section className="py-24 px-6 bg-gradient-to-b from-slate-50 to-white">
+    <section id="waitlist" className="py-24 px-6 bg-gradient-to-b from-slate-50 to-white">
       <div className="max-w-4xl mx-auto text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

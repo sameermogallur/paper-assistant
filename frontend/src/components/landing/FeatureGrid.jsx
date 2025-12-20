@@ -20,37 +20,39 @@ const features = [
   {
     icon: BarChart3,
     title: "Statistical Extraction",
-    description: "Automatically pulls p-values, sample sizes, effect sizes, and confidence intervals.",
+    description: "Automatically extracts p-values, sample sizes, effect sizes, and confidence intervals.",
     color: "blue",
     gradient: "from-blue-500 to-indigo-500"
   },
   {
     icon: Award,
-    title: "Quality Score",
-    description: "Heuristic trustworthiness score (0-100) with detailed grade breakdown.",
+    title: "Integrity Score",
+    description: "Research quality score (0-100) with detailed breakdown by criteria like ethics, limitations, and transparency.",
     color: "violet",
     gradient: "from-violet-500 to-purple-500"
   },
   {
     icon: AlertTriangle,
-    title: "Bias Detection",
-    description: "Linguistic analysis identifies political leaning and general bias levels in news content.",
+    title: "Red Flag Detection",
+    description: "Identifies concerning patterns like p-values clustered near 0.05, missing ethics statements, and undisclosed conflicts.",
     color: "amber",
     gradient: "from-amber-500 to-orange-500"
   },
   {
     icon: Brain,
-    title: "Logic Analysis",
-    description: "Detects logical fallacies like false dichotomies, hasty generalizations, and appeals to authority.",
+    title: "AI Research Chat",
+    description: "Ask questions about the paper, compare methodologies, and get intelligent analysis of findings.",
     color: "pink",
-    gradient: "from-pink-500 to-rose-500"
+    gradient: "from-pink-500 to-rose-500",
+    comingSoon: true
   },
   {
     icon: BookOpen,
-    title: "Trust & Fact-Checking",
-    description: "Verifies claims against reliable sources and assesses source reputation.",
+    title: "Synthesis Matrix",
+    description: "Compare multiple papers side-by-side, identify themes, and build comprehensive literature reviews.",
     color: "cyan",
-    gradient: "from-cyan-500 to-blue-500"
+    gradient: "from-cyan-500 to-blue-500",
+    comingSoon: true
   }
 ];
 
@@ -69,7 +71,7 @@ const itemVariants = {
 
 export default function FeatureGrid() {
   return (
-    <section className="py-24 px-6 bg-white">
+    <section id="features" className="py-24 px-6 bg-white">
       <div className="max-w-6xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -114,6 +116,13 @@ export default function FeatureGrid() {
               variants={itemVariants}
               className="group relative p-8 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:shadow-xl hover:shadow-slate-100 transition-all duration-300 hover:-translate-y-1"
             >
+              {/* Coming Soon Badge */}
+              {feature.comingSoon && (
+                <span className="absolute top-4 right-4 text-xs font-medium px-2 py-1 rounded-full bg-slate-200 text-slate-600">
+                  Coming Soon
+                </span>
+              )}
+              
               {/* Icon */}
               <div className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${feature.gradient} shadow-lg mb-6`}>
                 <feature.icon className="w-6 h-6 text-white" />
