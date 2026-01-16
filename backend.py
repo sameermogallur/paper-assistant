@@ -57,6 +57,16 @@ OCR_SEMAPHORE = asyncio.Semaphore(2)  # Limit concurrent OCR operations
 # TTL cache for reference verification (24 hours)
 reference_cache = TTLCache(maxsize=5000, ttl=86400)
 
+# Precompiled regex patterns for section detection (performance optimization)
+SECTION_PATTERNS = {
+    'Abstract': re.compile(r'\b(?:Abstract|ABSTRACT|Summary)\b', re.IGNORECASE | re.MULTILINE),
+    'Introduction': re.compile(r'\b(?:Introduction|INTRODUCTION|Background)\b', re.IGNORECASE | re.MULTILINE),
+    'Methods': re.compile(r'\b(?:Methods?|METHODS?|Methodology|Materials and Methods)\b', re.IGNORECASE | re.MULTILINE),
+    'Results': re.compile(r'\b(?:Results?|RESULTS?|Findings)\b', re.IGNORECASE | re.MULTILINE),
+    'Discussion': re.compile(r'\b(?:Discussion|DISCUSSION|Conclusions?)\b', re.IGNORECASE | re.MULTILINE),
+    'References': re.compile(r'\b(?:References|REFERENCES|Bibliography|Works Cited)\b', re.IGNORECASE | re.MULTILINE),
+}
+
 # --- LIFESPAN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -227,20 +237,12 @@ async def crossref_query(http: httpx.AsyncClient, query: str, use_title: bool = 
 def detect_sections(text: str) -> Dict[str, int]:
     """Identify major sections in paper"""
     sections = {}
-    patterns = {
-        'Abstract': r'\b(?:Abstract|ABSTRACT|Summary)\b',
-        'Introduction': r'\b(?:Introduction|INTRODUCTION|Background)\b',
-        'Methods': r'\b(?:Methods?|METHODS?|Methodology|Materials and Methods)\b',
-        'Results': r'\b(?:Results?|RESULTS?|Findings)\b',
-        'Discussion': r'\b(?:Discussion|DISCUSSION|Conclusions?)\b',
-        'References': r'\b(?:References|REFERENCES|Bibliography|Works Cited)\b'
-    }
-    
-    for name, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+
+    for name, pattern in SECTION_PATTERNS.items():
+        match = pattern.search(text)
         if match:
             sections[name] = match.start()
-    
+
     return dict(sorted(sections.items(), key=lambda x: x[1]))
 
 def extract_references_section(text: str) -> str:
@@ -903,23 +905,19 @@ async def analyze_pdf(request: Request, file: UploadFile = File(...)):
     
     # --- Run all analysis ---
     text_body = TextBody(text=full_text)
-    
-    # Citation verification
-    citations = await verify_references(request, text_body)
-    
+
+    # Run all analysis tasks concurrently for better performance
+    citations, stats, truthiness, intext = await asyncio.gather(
+        verify_references(request, text_body),
+        extract_statistics(text_body),
+        calculate_truthiness(text_body),
+        find_intext_citations(text_body)
+    )
+
     # Count by status (use actual status strings from Citation model)
     verified_count = sum(1 for c in citations if c.status == "verified")
     suspicious_count = sum(1 for c in citations if c.status == "suspicious")
     not_found_count = sum(1 for c in citations if c.status == "not_found")
-    
-    # Statistics extraction
-    stats = await extract_statistics(text_body)
-    
-    # Truthiness scoring
-    truthiness = await calculate_truthiness(text_body)
-    
-    # In-text citations
-    intext = await find_intext_citations(text_body)
     
     # --- Build response ---
     return IntegrityReport(
