@@ -266,18 +266,21 @@ def parse_reference_list(ref_text: str) -> List[str]:
     if len(numbered) > 5:
         references = [r.strip() for r in numbered if 20 < len(r.strip()) < 500]
     else:
-        # Fallback to line-based parsing
+        # Fallback to line-based parsing — O(n) list accumulation avoids quadratic string copies
         lines = ref_text.split('\n')
-        current = ""
+        current_parts: list[str] = []
+        current_len = 0
         for line in lines:
             line = line.strip()
-            if re.match(r'^[A-Z]', line) and current and len(current) > 20:
-                references.append(current)
-                current = line
+            if re.match(r'^[A-Z]', line) and current_parts and current_len > 20:
+                references.append(" ".join(current_parts))
+                current_parts = [line]
+                current_len = len(line)
             elif line:
-                current += " " + line if current else line
-        if current and len(current) > 20:
-            references.append(current)
+                current_parts.append(line)
+                current_len += len(line) + 1
+        if current_parts and current_len > 20:
+            references.append(" ".join(current_parts))
     
     return references[:50]
 
