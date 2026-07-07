@@ -32,8 +32,6 @@ sudo apt-get install tesseract-ocr poppler-utils
 
 ### Venv setup
 
-Both `.venv/` and `venv/` in the repo have broken shebangs — the project moved from `~/Documents/` to `~/Projects/` and the venvs were never rebuilt. Recreate from scratch:
-
 ```bash
 python3.11 -m venv .venv --clear
 source .venv/bin/activate
@@ -84,6 +82,7 @@ Copy `.env.example` to `.env`:
 | `CROSSREF_CONCURRENT_REQUESTS` | No | `3` | Semaphore limit for concurrent Crossref calls |
 | `POPPLER_PATH` | No | — | Windows only: path to poppler `bin/` directory |
 | `ALLOWED_ORIGINS` | No | `*` | Comma-separated CORS origins |
+| `USE_SEMANTIC_MATCHING` | No | `1` | Set to `0` to fall back to difflib `title_similarity()` for citation scoring |
 
 ## API Endpoints
 
@@ -112,15 +111,13 @@ Base URL: `http://localhost:8000`
 ### Done
 - **`asyncio.gather()` parallelization** in `/api/analyze_pdf` (`backend.py:910`) — all four sub-analyses run concurrently
 - **Regex precompilation** at module level (`backend.py:61–68`) — `SECTION_PATTERNS` compiled once on import, not per request
-- **`requirements.txt` security updates** — pypdf → 6.6.0, python-multipart → 0.0.18, fastapi → 0.128.0. The installed `.venv` still has the old versions; they take effect after the venv rebuild above.
+- **`requirements.txt` security updates + venv rebuild** — pypdf → 6.6.0, python-multipart → 0.0.18, fastapi → 0.128.0. Installed and confirmed.
 - **O(n²) string concat fix** in `parse_reference_list` (`backend.py:270–278`) — replaced loop concatenation with list accumulation + `" ".join()`
-- **Test skeleton + CI** — `tests/test_backend.py` (8 tests covering pure functions + API smoke test) + `.github/workflows/test.yml`
+- **Test skeleton + CI** — `tests/test_backend.py` (17 tests) + `.github/workflows/test.yml`
+- **`extract_title_from_ref()` fix** (`backend.py`) — old regex captured the author list (everything before the first period) instead of the paper title. New function handles APA-style `(YEAR). Title.` and Vancouver-style `Author. Title. Journal.` patterns.
+- **SPECTER semantic embeddings** for citation matching — replaced `difflib.SequenceMatcher` in `verify_references()` with `allenai-specter` (sentence-transformers). Encodes all Crossref candidates for a reference in a single batched forward pass. Controllable via `USE_SEMANTIC_MATCHING` env var (default `1`). Old `title_similarity()` kept as fallback. Model loads at startup via lifespan hook.
 
-### Planned next (not this session)
-
-**Replace `title_similarity()` with SPECTER2 semantic embeddings** — top-priority next major feature.
-
-Currently `title_similarity()` at `backend.py:303` uses `difflib.SequenceMatcher`, a character-level algorithm from Python's stdlib. It has no understanding of scientific vocabulary: it cannot know that "myocardial infarction" ≈ "heart attack", or that two papers with superficially similar titles are actually distinct. [SPECTER2](https://huggingface.co/allenai/specter2) (Allen AI) is an embedding model trained specifically on scientific paper titles and abstracts — it produces 768-dimensional dense vectors where semantically similar papers cluster together regardless of surface wording. The fix is surgical: replace `title_similarity()` and the scoring block in `verify_references()` with cosine similarity over SPECTER2 vectors. New dependency: `sentence-transformers`. Prerequisite: test suite must be in place first so regressions are catchable — which is now satisfied.
+### Planned next
 
 ### Deferred (documented — stubbed as "Coming Soon" in the UI)
 

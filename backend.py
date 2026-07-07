@@ -21,6 +21,7 @@ import random
 import logging
 import os
 import sys
+import numpy as np
 from cachetools import TTLCache
 import pytesseract
 from pdf2image import convert_from_bytes
@@ -39,6 +40,7 @@ CROSSREF_EMAIL = os.getenv("CROSSREF_EMAIL", "test@example.com")
 CROSSREF_CONCURRENT = int(os.getenv("CROSSREF_CONCURRENT_REQUESTS", 3))
 POPPLER_PATH = os.getenv("POPPLER_PATH")  # For Windows
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+USE_SEMANTIC = os.getenv("USE_SEMANTIC_MATCHING", "1") == "1"
 
 # Security for OCR
 Image.MAX_IMAGE_PIXELS = 30_000_000  # Prevent decompression bombs
@@ -78,6 +80,9 @@ async def lifespan(app: FastAPI):
             "User-Agent": f"ResearchAssistant/1.0 (mailto:{CROSSREF_EMAIL})"
         }
     )
+    if USE_SEMANTIC:
+        get_specter_model()
+        logger.info("SPECTER model loaded")
     logger.info("Started ResearchAssistant backend")
     yield
     # Shutdown
@@ -311,6 +316,57 @@ def title_similarity(a: str, b: str) -> float:
     b_norm = re.sub(r'\s+', ' ', b).strip().lower()
     return difflib.SequenceMatcher(None, a_norm, b_norm).ratio()
 
+def extract_title_from_ref(ref: str) -> str:
+    """Extract the likely title from a cleaned citation reference string.
+
+    Handles APA-style (Author. (YEAR). Title. Journal.) and Vancouver-style
+    (Author. Title. Journal. YEAR;) citations. The previous regex captured
+    everything up to the first period, returning the author list instead of
+    the title for both formats.
+    """
+    if not ref:
+        return ref
+
+    # APA-style: "(YEAR[anything]). Title. Journal..."
+    m = re.search(r'\(\d{4}[^)]*\)\.\s*(.+)', ref)
+    if m:
+        candidate = m.group(1).strip()
+        # Trim at the first ". " that starts a new capitalised segment (journal name)
+        title_end = re.search(r'\.\s+[A-Z]', candidate)
+        if title_end:
+            candidate = candidate[:title_end.start()]
+        if len(candidate.split()) >= 2:
+            return candidate
+
+    # Vancouver/numbered fallback: split on ". " and return the first segment
+    # that looks like a title (starts with a letter, ≥ 3 words) after the authors
+    parts = re.split(r'\.\s+', ref)
+    for part in parts[1:]:
+        part = part.strip()
+        if part and part[0].isalpha() and len(part.split()) >= 3:
+            return part
+
+    # Fallback: original behaviour
+    m = re.match(r'^[^.]+', ref)
+    return m.group(0).strip() if m else ref
+
+_specter_model = None
+
+def get_specter_model():
+    global _specter_model
+    if _specter_model is None:
+        from sentence_transformers import SentenceTransformer
+        _specter_model = SentenceTransformer('allenai-specter')
+    return _specter_model
+
+def semantic_title_similarity(a: str, b: str) -> float:
+    """Compute semantic similarity 0..1 using SPECTER embeddings and cosine distance."""
+    if not a or not b:
+        return 0.0
+    model = get_specter_model()
+    vecs = model.encode([a, b], normalize_embeddings=True)
+    return float(np.dot(vecs[0], vecs[1]))
+
 # --- ENDPOINTS ---
 
 @app.get("/healthz", response_model=HealthResponse)
@@ -506,16 +562,24 @@ async def verify_references(request: Request, body: TextBody):
             if item is None:
                 data = await crossref_query(request.app.state.http, clean_ref, rows=3)
                 if data and data.get('message', {}).get('items'):
-                    guess = re.match(r'^[^.]+', clean_ref)
-                    guessed_title = guess.group(0) if guess else clean_ref
+                    guessed_title = extract_title_from_ref(clean_ref)
                     best = None
                     best_total = -1.0
                     best_base = 0.0
                     best_sim = 0.0
-                    for cand in data['message']['items']:
+                    candidates = data['message']['items']
+                    cand_titles = [c.get('title', [''])[0] for c in candidates]
+                    if USE_SEMANTIC:
+                        # Batch encode query + all candidate titles in one forward pass
+                        model = get_specter_model()
+                        all_titles = [guessed_title] + cand_titles
+                        vecs = model.encode(all_titles, normalize_embeddings=True)
+                        query_vec = vecs[0]
+                        sims = [float(np.dot(query_vec, vecs[i + 1])) for i in range(len(candidates))]
+                    else:
+                        sims = [title_similarity(guessed_title, ct) for ct in cand_titles]
+                    for cand, sim in zip(candidates, sims):
                         cand_base = float(cand.get('score', 0.0))
-                        cand_title = cand.get('title', [''])[0]
-                        sim = title_similarity(guessed_title, cand_title)
                         total = cand_base + 40.0 * sim
                         if total > best_total:
                             best_total = total
