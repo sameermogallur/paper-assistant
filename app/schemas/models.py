@@ -74,6 +74,36 @@ class IntegrityReport(BaseModel):
     disclaimer: str = "This is an automated heuristic analysis, not peer review."
 
 
+class ProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+
+
+class ProjectSummary(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    paper_count: int
+    created_at: str
+
+
+class ProjectDetail(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    paper_ids: List[int]
+    created_at: str
+
+
+class AddPaperRequest(BaseModel):
+    paper_id: int
+
+
 class PaperIngestResponse(BaseModel):
     paper_id: int
     sha256: str

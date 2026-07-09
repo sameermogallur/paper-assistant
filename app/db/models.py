@@ -1,14 +1,15 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Float, Text, LargeBinary,
-    DateTime, ForeignKey, UniqueConstraint, Index,
+    DateTime, ForeignKey, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    # timezone-naive UTC — SQLite's pysqlite driver rejects tz-aware datetimes
+    return datetime.utcnow()
 
 
 class Paper(Base):
@@ -25,7 +26,7 @@ class Paper(Base):
     sections = Column(Text, nullable=True)       # JSON-encoded dict
     word_count = Column(Integer, nullable=True)
     extraction_method = Column(String(50), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+    created_at = Column(DateTime(), default=_now, nullable=False)
 
     reports = relationship("AnalysisReport", back_populates="paper", cascade="all, delete-orphan")
     references = relationship("Reference", back_populates="paper", cascade="all, delete-orphan")
@@ -42,7 +43,7 @@ class AnalysisReport(Base):
     integrity_score = Column(Integer, nullable=True)
     integrity_grade = Column(String(2), nullable=True)
     analyzer_version = Column(String(20), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+    created_at = Column(DateTime(), default=_now, nullable=False)
 
     paper = relationship("Paper", back_populates="reports")
 
@@ -67,7 +68,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+    created_at = Column(DateTime(), default=_now, nullable=False)
 
     paper_links = relationship("ProjectPaper", back_populates="project", cascade="all, delete-orphan")
 
@@ -77,7 +78,7 @@ class ProjectPaper(Base):
 
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
     paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), primary_key=True)
-    added_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+    added_at = Column(DateTime(), default=_now, nullable=False)
 
     project = relationship("Project", back_populates="paper_links")
     paper = relationship("Paper", back_populates="project_links")

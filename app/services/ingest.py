@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -118,7 +118,7 @@ async def ingest_paper(
         intext_total=intext.total_count,
         intext_numeric=len(intext.numeric),
         intext_author_year=len(intext.author_year),
-        analyzed_at=datetime.now(timezone.utc).isoformat(),
+        analyzed_at=datetime.utcnow().isoformat(),
         disclaimer="This is an automated heuristic analysis, not peer review.",
     )
 
