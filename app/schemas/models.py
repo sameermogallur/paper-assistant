@@ -74,6 +74,13 @@ class IntegrityReport(BaseModel):
     disclaimer: str = "This is an automated heuristic analysis, not peer review."
 
 
+class PaperIngestResponse(BaseModel):
+    paper_id: int
+    sha256: str
+    was_duplicate: bool
+    report: Optional[IntegrityReport]
+
+
 class HealthResponse(BaseModel):
     status: str
     timestamp: str

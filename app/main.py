@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CROSSREF_EMAIL, USE_SEMANTIC, ALLOWED_ORIGINS
-from app.routers import health, pdf, analysis
+from app.routers import health, pdf, analysis, papers
 
 logger = logging.getLogger(__name__)
 
@@ -40,3 +40,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(pdf.router)
 app.include_router(analysis.router)
+app.include_router(papers.router)

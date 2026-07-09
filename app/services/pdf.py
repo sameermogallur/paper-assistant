@@ -1,6 +1,9 @@
-import re
+import io
 import logging
-from typing import Dict
+import re
+from typing import Dict, Tuple
+
+import pypdf
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,21 @@ def detect_sections(text: str) -> Dict[str, int]:
         if match:
             sections[name] = match.start()
     return dict(sorted(sections.items(), key=lambda x: x[1]))
+
+
+def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> Tuple[str, int]:
+    """Return (full_text, num_pages) from raw PDF bytes. Raises on corrupt input."""
+    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+    num_pages = len(reader.pages)
+    parts = []
+    for i, page in enumerate(reader.pages):
+        try:
+            text = page.extract_text()
+            if text:
+                parts.append(text)
+        except Exception as e:
+            logger.warning(f"Failed to extract page {i + 1}: {e}")
+    return "\n".join(parts), num_pages
 
 
 def extract_references_section(text: str) -> str:
