@@ -133,3 +133,105 @@ The following are already wired into the frontend as disabled/placeholder elemen
 | News article analysis | `ContentTypeSelector.jsx`, `Home.jsx:200` | Different content-type path, UI button disabled |
 | Citation network visualization | `app_v2.py:563` | |
 | Paper library with search | `app_v2.py:563` | |
+
+## Long-Term Vision / Roadmap
+
+> Added 2026-07-09 after a planning session. This section is the product trajectory; the
+> "Roadmap / Backlog" section above remains the near-term tactical list. Full plan detail
+> lives in the session plan; this is the durable summary future sessions should work from.
+
+### Vision
+
+Evolve AIRA from a stateless citation checker into a **lightweight research workspace**
+(think Elicit/Zotero/Scite hybrid) where paper integrity checking is one intelligence
+layer, not the whole product. Papers persist in a library, are organized into projects,
+and cross-paper intelligence (similarity, conflicting findings, later chat/takeaways)
+operates over that library.
+
+**Context driving scope:** ~4–5 focused weeks available (until early-to-mid August 2026),
+then development continues at a much slower pace. This is a portfolio piece for
+bioinformatics/AI-ML roles — technical depth and defensibility beat feature count.
+2–3 things built solidly beat 8 things half-built.
+
+### Locked decisions (with rationale)
+
+1. **Persistence: SQLite via SQLAlchemy + Alembic.** Single-file DB (`data/aira.db`),
+   uploaded PDFs at `data/pdfs/<sha256>.pdf`, both gitignored. Zero-setup for reviewers;
+   SQLAlchemy keeps a Postgres migration cheap if ever needed. Alembic from day one
+   because the schema will keep evolving during the slow-pace phase.
+2. **Vector search: brute-force numpy cosine over BLOB-stored vectors.** At library scale
+   (10²–10³ papers, 768-dim SPECTER) this is milliseconds and dependency-free.
+   sqlite-vec/FAISS is the documented upgrade path past ~10k papers. Deliberate,
+   defensible engineering choice.
+3. **Local-first AI.** Core intelligence (SPECTER embeddings, NLI conflict flagging) runs
+   keyless on local models. LLM-API features (takeaways, chat, writing help) are optional,
+   activate only when a key is configured, and land post-window.
+4. **Single-user local tool.** No auth/multi-user, indefinitely. News analysis stays stubbed.
+
+### Core data model
+
+| Entity | Key fields | Built when |
+|--------|-----------|------------|
+| `Paper` | sha256 (dedup), title, authors, year, doi, pdf_path, full_text, sections, counts, extraction_method | Foundation |
+| `AnalysisReport` | paper_id, report_json (full IntegrityReport), integrity_score/grade (promoted columns), **analyzer_version** | Foundation |
+| `Reference` | paper_id, raw_text, doi, matched_title, status, confidence — normalized out of the report (enables citation graph later) | Foundation |
+| `Project` + `ProjectPaper` m2m | name, description; papers can be in many projects | Foundation |
+| `Embedding` | paper_id, kind (`title_abstract` now; `chunk` later for RAG), vector BLOB | Foundation |
+| `StatClaim` | paper_id, claim_type (p_value/effect_size/sample_size/ci), raw_text, parsed_value, **context_sentence**, section | Conflict detection |
+| `ConflictFlag` | project_id, claim_a/claim_b, relation, nli_confidence, status (open/reviewed/dismissed) | Conflict detection |
+| `Annotation` | paper_id, anchor (page + text quote/offsets), content, color | Future |
+| `Finding` | curated note linking papers/claims within a project | Future |
+
+### Hard forks (done in foundation) vs additive (later, no rework)
+
+**Forks:** stateless→persistent ingest pipeline; `backend.py` (1,013 lines) → `app/`
+package (routers/ + services/ + db/models/schemas, with `backend.py` kept as a 3-line
+shim so `uvicorn backend:app`, CI, and `app_v2.py` keep working); `analyzer_version` on
+reports from day one; `extract_statistics` context-sentence capture (touches the core
+response contract — additive `claims` field alongside existing string lists).
+
+**Additive later:** annotations + PDF viewer (react-pdf), RAG chat (chunk embeddings),
+LLM takeaways/writing help, citation-network viz (enabled by normalized `Reference`),
+URL/arXiv ingestion, BibTeX export (port from `app_v2.py:240`), FTS5 full-text search,
+tags/reading status, Zotero import.
+
+**Minimum foundational layer that unlocks the most:** DB + ingest persistence + package
+split + stored embeddings + projects. Every wishlist feature then becomes "add a table
+and a router."
+
+### Phased roadmap — the 4–5 week window
+
+- **Week 1 — Foundation.** Package restructure (tests stay green); SQLAlchemy models +
+  Alembic; ingest pipeline (`POST /api/papers`: dedup → store PDF → extract → persist
+  Paper/Report/References/Embedding); projects CRUD. Tests: ingest, dedup, model
+  round-trips against tmp SQLite.
+- **Week 2 — Library UI + discovery backend.** React Query (from deferred backlog);
+  routes `/library`, `/projects/:id`, `/papers/:id` reusing existing dashboard components
+  against stored reports. `GET /api/papers/{id}/similar` (cosine over stored SPECTER
+  vectors, library/project scope) and `GET /api/papers/{id}/related` (OpenAlex
+  `related_works`, polite `mailto`, cached).
+- **Week 3 — Discovery UI + conflict groundwork.** "Discover" tab (In your library /
+  From OpenAlex; add-to-project for library hits; metadata + link-out for OpenAlex
+  results — importing external papers is stretch, not scope). Extend `extract_statistics`
+  with `StatClaim` context capture + tests; persist claims at ingest.
+- **Week 4 — Claim/conflict detection. TIME-BOXED: 5 working days hard cap.**
+  Scope: within a single project only; anchored on StatClaims (never general free-text
+  claim extraction); off-the-shelf NLI cross-encoder (`cross-encoder/nli-deberta-v3-base`),
+  no fine-tuning. Pipeline: pair same-type claims across papers → SPECTER-similarity
+  screen on context sentences → NLI entailment/contradiction scoring → numeric heuristic
+  (opposite-direction effects, p<0.05 vs p>0.05). Output is always **"flagged for
+  review" + confidence — never a verdict.**
+  - **Day-3 go/no-go — EXPLICIT USER GATE, not self-assessed.** Run the pipeline on a
+    hand-built set of 3–5 paper pairs with known agreements/conflicts, then STOP:
+    present the flagged examples to the user and wait for their review. The user
+    decides continue vs fall back; the working session must not make that call itself.
+  - **Fallback:** cut the NLI stage, keep StatClaim extraction (valuable regardless),
+    ship semantic discovery alone.
+- **Week 5 — Buffer + portfolio polish.** README rewrite with architecture diagram +
+  demo GIF/screenshots. Stretch only if clean: BibTeX export port, FTS5 search.
+
+### Post-window direction (documented, deliberately not started)
+
+PDF viewer + annotations → LLM-optional layer (project-aware takeaways, RAG chat,
+writing help — all key-gated) → citation network visualization → URL/arXiv ingestion →
+library QoL (tags, full-text search, Zotero import).
