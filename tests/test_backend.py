@@ -4,15 +4,16 @@ Covers pure utility functions directly and one API smoke test via TestClient.
 Intentionally minimal — skeleton to build on once SPECTER2 embeddings are added.
 """
 import re
-import sys
-import os
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from backend import parse_reference_list, title_similarity, extract_title_from_ref, semantic_title_similarity
+from app.utils.helpers import (
+    parse_reference_list,
+    title_similarity,
+    extract_title_from_ref,
+)
+from app.services.embeddings import semantic_title_similarity
+from app.main import app
 from fastapi.testclient import TestClient
-from backend import app
 
 
 # ---------------------------------------------------------------------------
