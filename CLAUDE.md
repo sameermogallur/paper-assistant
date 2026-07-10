@@ -6,14 +6,18 @@ AIRA analyzes research papers for integrity and reproducibility signals. Upload 
 
 ```
 User → React frontend (Vite)   port 5173 ──┐
-User → Streamlit app_v2.py     port 8501 ──┤──▶ FastAPI backend.py  port 8000 ──▶ Crossref API
+User → Streamlit app_v2.py     port 8501 ──┤──▶ FastAPI app/ package   port 8000 ──▶ Crossref API
+                                             │         └── backend.py (3-line shim)       │
+                                             └──────────────────────────────────▶ SQLite data/aira.db
 ```
 
 ### Key files
 
 | File | Role |
 |------|------|
-| `backend.py` | FastAPI entry point — all analysis logic (945 lines) |
+| `backend.py` | 3-line shim — `from app.main import app`; entry point for uvicorn and CI |
+| `app/` | FastAPI package — `main.py` (lifespan + CORS), `config.py` (env vars + constants), `routers/` (health, pdf, analysis, papers, projects), `services/` (pdf, references, citations, statistics, integrity, embeddings, ingest), `schemas/models.py`, `utils/helpers.py`, `db/` (engine + 6 ORM models) |
+| `app/db/models.py` | SQLAlchemy ORM: Paper, AnalysisReport, Reference, Project, ProjectPaper, Embedding |
 | `frontend/` | React + Vite + Tailwind + shadcn/ui — primary UI |
 | `app_v2.py` | Legacy Streamlit frontend — calls FastAPI backend; still functional, secondary path |
 | `app_legacy.py` | Original standalone Streamlit app (pre-API architecture, OpenAI-dependent, no Crossref, no OCR). Kept as reference only — do not run in production. |
@@ -99,6 +103,14 @@ Base URL: `http://localhost:8000`
 | POST | `/api/extract_statistics` | Extract p-values, sample sizes, effect sizes, CIs |
 | POST | `/api/truthiness_score` | Compute heuristic integrity score |
 | POST | `/api/analyze_pdf` | Full pipeline — combined endpoint used by the frontend |
+| POST | `/api/papers` | Ingest PDF — SHA256 dedup, persist Paper + Report + References + Embedding; 201 new / 200 duplicate |
+| GET | `/api/projects` | List all projects with paper counts |
+| POST | `/api/projects` | Create project |
+| GET | `/api/projects/{id}` | Get project with paper_ids |
+| PUT | `/api/projects/{id}` | Update project name/description |
+| DELETE | `/api/projects/{id}` | Delete project (cascades ProjectPaper links) |
+| POST | `/api/projects/{id}/papers` | Add paper to project |
+| DELETE | `/api/projects/{id}/papers/{paper_id}` | Remove paper from project |
 
 ## Git Conventions
 
@@ -109,15 +121,18 @@ Base URL: `http://localhost:8000`
 ## Roadmap / Backlog
 
 ### Done
-- **`asyncio.gather()` parallelization** in `/api/analyze_pdf` (`backend.py:910`) — all four sub-analyses run concurrently
-- **Regex precompilation** at module level (`backend.py:61–68`) — `SECTION_PATTERNS` compiled once on import, not per request
+- **`asyncio.gather()` parallelization** — all four sub-analyses run concurrently in `app/services/ingest.py` and `app/routers/analysis.py`
+- **Regex precompilation** — `SECTION_PATTERNS` compiled once at module level in `app/services/pdf.py`, not per request
 - **`requirements.txt` security updates + venv rebuild** — pypdf → 6.6.0, python-multipart → 0.0.18, fastapi → 0.128.0. Installed and confirmed.
-- **O(n²) string concat fix** in `parse_reference_list` (`backend.py:270–278`) — replaced loop concatenation with list accumulation + `" ".join()`
+- **O(n²) string concat fix** in `parse_reference_list` (`app/utils/helpers.py`) — replaced loop concatenation with list accumulation + `" ".join()`
 - **Test skeleton + CI** — `tests/test_backend.py` (17 tests) + `.github/workflows/test.yml`
-- **`extract_title_from_ref()` fix** (`backend.py`) — old regex captured the author list (everything before the first period) instead of the paper title. New function handles APA-style `(YEAR). Title.` and Vancouver-style `Author. Title. Journal.` patterns.
-- **SPECTER semantic embeddings** for citation matching — replaced `difflib.SequenceMatcher` in `verify_references()` with `allenai-specter` (sentence-transformers). Encodes all Crossref candidates for a reference in a single batched forward pass. Controllable via `USE_SEMANTIC_MATCHING` env var (default `1`). Old `title_similarity()` kept as fallback. Model loads at startup via lifespan hook.
+- **`extract_title_from_ref()` fix** (`app/utils/helpers.py`) — old regex captured the author list (everything before the first period) instead of the paper title. New function handles APA-style `(YEAR). Title.` and Vancouver-style `Author. Title. Journal.` patterns.
+- **SPECTER semantic embeddings** for citation matching — `app/services/embeddings.py`; replaced `difflib.SequenceMatcher` in `verify_references()` with `allenai-specter` (sentence-transformers). Encodes all Crossref candidates for a reference in a single batched forward pass. Controllable via `USE_SEMANTIC_MATCHING` env var (default `1`). Old `title_similarity()` kept as fallback. Model loads at startup via lifespan hook.
+- **Week 1 Foundation** — package restructure into `app/`; SQLAlchemy 6-table schema + Alembic initial migration; `POST /api/papers` ingest pipeline (SHA256 dedup, PDF storage, Paper/Report/Reference/Embedding persistence; 768-dim SPECTER vector confirmed in DB); projects CRUD (7 endpoints). 50 tests green.
 
 ### Planned next
+
+- **Tech debt: `_try_store_embedding` blocks async event loop** (`app/services/ingest.py`). `model.encode()` is CPU-bound and runs synchronously inside the ingest coroutine. Safe for single-user local use; wrap in `asyncio.run_in_executor()` before adding concurrent ingest.
 
 ### Deferred (documented — stubbed as "Coming Soon" in the UI)
 
@@ -201,7 +216,7 @@ and a router."
 
 ### Phased roadmap — the 4–5 week window
 
-- **Week 1 — Foundation.** Package restructure (tests stay green); SQLAlchemy models +
+- **[DONE] Week 1 — Foundation.** Package restructure (tests stay green); SQLAlchemy models +
   Alembic; ingest pipeline (`POST /api/papers`: dedup → store PDF → extract → persist
   Paper/Report/References/Embedding); projects CRUD. Tests: ingest, dedup, model
   round-trips against tmp SQLite.
