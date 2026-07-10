@@ -46,10 +46,6 @@ def client():
 @pytest.fixture
 def paper_id(client):
     """Insert a Paper row and return its id for membership tests."""
-    engine = create_engine("sqlite:///:memory:")
-    # We need to insert directly into the same DB the client is using.
-    # Re-use the overridden session via a direct API call isn't possible,
-    # so grab the session from the override instead.
     db: Session = next(app.dependency_overrides[get_db]())
     p = Paper(sha256="b" * 64, word_count=0, extraction_method="native")
     db.add(p)
