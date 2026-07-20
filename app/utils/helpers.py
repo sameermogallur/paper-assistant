@@ -18,6 +18,21 @@ def get_cache_key(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 
+# Crossref-recommended DOI shape. Kept shared so reference verification and
+# ingest metadata extraction can't drift apart. Deliberately excludes <, >, #
+# (legal in rare SICI-era DOIs): including them would slurp HTML/XML fragments
+# from PDF-extracted text, a worse failure than truncating legacy DOIs.
+DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
+
+
+def extract_first_doi(text: str) -> Optional[str]:
+    match = DOI_PATTERN.search(text)
+    if not match:
+        return None
+    # The character class admits sentence-ending punctuation; strip it.
+    return match.group(0).rstrip(".,;:")
+
+
 def get_year_from_item(item: dict) -> Optional[str]:
     for field in ["issued", "published-online", "published-print"]:
         if item.get(field) and item[field].get("date-parts"):

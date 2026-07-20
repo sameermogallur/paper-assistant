@@ -10,6 +10,7 @@ from app.config import CROSSREF_EMAIL, USE_SEMANTIC
 from app.cache import CROSSREF_SEMAPHORE, reference_cache
 from app.schemas.models import Citation
 from app.utils.helpers import (
+    extract_first_doi,
     get_cache_key,
     sleep_with_backoff,
     extract_title_from_ref,
@@ -53,6 +54,14 @@ async def crossref_query(
     return None
 
 
+def _title_sims(guessed_title: str, cand_titles: List[str]) -> List[float]:
+    if USE_SEMANTIC:
+        model = get_specter_model()
+        vecs = model.encode([guessed_title] + cand_titles, normalize_embeddings=True)
+        return [float(np.dot(vecs[0], vecs[i + 1])) for i in range(len(cand_titles))]
+    return [title_similarity(guessed_title, ct) for ct in cand_titles]
+
+
 async def _verify_one(http: httpx.AsyncClient, reference: str) -> Citation:
     cache_key = get_cache_key(reference)
     if cache_key in reference_cache:
@@ -66,15 +75,14 @@ async def _verify_one(http: httpx.AsyncClient, reference: str) -> Citation:
             r"([A-Z][a-z]+)(?:\s*,|\s+and\s+|\s+&\s+)", reference
         )[:5]
 
-        doi_in_ref = re.search(r"10\.\d{4,}/[-._;()/:\\w]+", reference)
+        doi_in_ref = extract_first_doi(reference)
         item = None
         base = 0.0
         title_sim_val = 0.0
         doi_ok = False
 
         if doi_in_ref:
-            doi = doi_in_ref.group(0)
-            work_url = f"https://api.crossref.org/works/{doi}"
+            work_url = f"https://api.crossref.org/works/{doi_in_ref}"
             for attempt in range(2):
                 try:
                     resp = await http.get(work_url, params={"mailto": CROSSREF_EMAIL})
@@ -82,7 +90,15 @@ async def _verify_one(http: httpx.AsyncClient, reference: str) -> Citation:
                         msg = resp.json().get("message", {})
                         if msg:
                             item = msg
-                            base = float(msg.get("score", 60.0)) if isinstance(msg.get("score"), (int, float)) else 60.0
+                            # A resolvable DOI alone must not verify the reference:
+                            # works/{doi} responses carry no relevance score, and a
+                            # typo'd DOI can resolve to an unrelated article. Title
+                            # agreement has to carry the rest of the confidence.
+                            base = 30.0
+                            item_title = msg.get("title", [""])[0] if msg.get("title") else ""
+                            guessed_title = extract_title_from_ref(clean_ref)
+                            if item_title and guessed_title:
+                                title_sim_val = _title_sims(guessed_title, [item_title])[0]
                             doi_ok = True
                         break
                     elif resp.status_code in (429, 500, 502, 503, 504):
@@ -98,15 +114,8 @@ async def _verify_one(http: httpx.AsyncClient, reference: str) -> Citation:
             if data and data.get("message", {}).get("items"):
                 guessed_title = extract_title_from_ref(clean_ref)
                 candidates = data["message"]["items"]
-                cand_titles = [c.get("title", [""])[0] for c in candidates]
-                if USE_SEMANTIC:
-                    model = get_specter_model()
-                    all_titles = [guessed_title] + cand_titles
-                    vecs = model.encode(all_titles, normalize_embeddings=True)
-                    query_vec = vecs[0]
-                    sims = [float(np.dot(query_vec, vecs[i + 1])) for i in range(len(candidates))]
-                else:
-                    sims = [title_similarity(guessed_title, ct) for ct in cand_titles]
+                cand_titles = [c.get("title", [""])[0] if c.get("title") else "" for c in candidates]
+                sims = _title_sims(guessed_title, cand_titles)
 
                 best = None
                 best_total = -1.0
@@ -140,7 +149,7 @@ async def _verify_one(http: httpx.AsyncClient, reference: str) -> Citation:
                 if crossref_authors & ref_authors:
                     boost += 10
                     authors_ok = True
-            if doi_in_ref and item.get("DOI") and doi_in_ref.group(0).lower() == item["DOI"].lower():
+            if doi_in_ref and item.get("DOI") and doi_in_ref.lower() == item["DOI"].lower():
                 boost += 30
                 doi_ok = True
 
