@@ -111,6 +111,32 @@ class PaperIngestResponse(BaseModel):
     report: Optional[IntegrityReport]
 
 
+class PaperListItem(BaseModel):
+    id: int
+    title: Optional[str]
+    authors: List[str] = []
+    year: Optional[int]
+    doi: Optional[str]
+    word_count: Optional[int]
+    extraction_method: Optional[str]
+    created_at: str
+    integrity_score: Optional[int]
+    integrity_grade: Optional[str]
+    has_embedding: bool
+
+
+class PaperListResponse(BaseModel):
+    items: List[PaperListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PaperDetailResponse(PaperListItem):
+    sha256: str
+    report: Optional[IntegrityReport]
+
+
 class HealthResponse(BaseModel):
     status: str
     timestamp: str

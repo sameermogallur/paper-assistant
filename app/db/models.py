@@ -3,7 +3,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Text, LargeBinary,
     DateTime, ForeignKey, UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import deferred, relationship
 from app.db.database import Base
 
 
@@ -22,7 +22,8 @@ class Paper(Base):
     year = Column(Integer, nullable=True)
     doi = Column(String(255), nullable=True)
     pdf_path = Column(String(512), nullable=True)
-    full_text = Column(Text, nullable=True)
+    # deferred: can be multi-MB; endpoints that need it must ask explicitly
+    full_text = deferred(Column(Text, nullable=True))
     sections = Column(Text, nullable=True)       # JSON-encoded dict
     word_count = Column(Integer, nullable=True)
     extraction_method = Column(String(50), nullable=True)

@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -18,10 +19,43 @@ from app.services import integrity as integrity_svc
 from app.services import references as references_svc
 from app.services import statistics as statistics_svc
 from app.services.pdf import detect_sections, extract_text_from_pdf_bytes
+from app.utils.helpers import extract_first_doi
 
 logger = logging.getLogger(__name__)
 
 PDF_DIR = Path("data/pdfs")
+
+# Non-title lines commonly found in PDF front matter before the real title.
+_TITLE_SKIP_PREFIXES = ("doi", "10.", "arxiv", "http", "www.", "issn", "vol.", "©")
+_TITLE_SKIP_RE = re.compile(
+    r"(?i)\bjournal of\b|\bproceedings\b|\bvol\.?\s*\d|\bpp\.\s*\d|received:|accepted:"
+)
+
+
+def _extract_title(full_text: str, sections: dict, filename: str) -> str:
+    """Crude title heuristic: first substantial line before the Abstract.
+
+    Falls back to the uploaded filename. Known-imprecise; tracked in the
+    CLAUDE.md backlog for a proper metadata lookup later.
+    """
+    head_end = min(sections.get("Abstract", 500), 1000)
+    lines = full_text[:head_end].splitlines()
+    # The slice can cut a line mid-word; a truncated title must never be stored.
+    if head_end < len(full_text) and full_text[head_end] not in "\r\n" and lines:
+        lines.pop()
+    for line in lines:
+        line = line.strip()
+        if not 20 <= len(line) <= 300:
+            continue
+        if line.lower().startswith(_TITLE_SKIP_PREFIXES):
+            continue
+        if _TITLE_SKIP_RE.search(line):
+            continue
+        letters = sum(c.isalpha() for c in line)
+        if letters < len(line) * 0.5:
+            continue
+        return line
+    return Path(filename).stem
 
 
 async def ingest_paper(
@@ -39,7 +73,8 @@ async def ingest_paper(
         report_row = db.execute(
             select(AnalysisReport)
             .where(AnalysisReport.paper_id == existing.id)
-            .order_by(AnalysisReport.created_at.desc())
+            .order_by(AnalysisReport.id.desc())
+            .limit(1)
         ).scalar_one_or_none()
         report = None
         if report_row:
@@ -123,8 +158,15 @@ async def ingest_paper(
     )
 
     # --- Persist in a single transaction ---
+    # Don't bisect a DOI at the head cut — extend to the end of the current token.
+    doi_cut = 3000
+    while doi_cut < len(full_text) and not full_text[doi_cut].isspace():
+        doi_cut += 1
+
     paper = Paper(
         sha256=sha256,
+        title=_extract_title(full_text, sections, filename),
+        doi=extract_first_doi(full_text[:doi_cut]),
         pdf_path=pdf_path,
         full_text=full_text,
         sections=json.dumps(sections),

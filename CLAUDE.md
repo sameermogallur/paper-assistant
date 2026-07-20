@@ -104,6 +104,8 @@ Base URL: `http://localhost:8000`
 | POST | `/api/truthiness_score` | Compute heuristic integrity score |
 | POST | `/api/analyze_pdf` | Full pipeline — combined endpoint used by the frontend |
 | POST | `/api/papers` | Ingest PDF — SHA256 dedup, persist Paper + Report + References + Embedding; 201 new / 200 duplicate |
+| GET | `/api/papers` | List papers — pagination envelope, optional `project_id` filter, latest report score, `has_embedding` |
+| GET | `/api/papers/{id}` | Paper detail + stored `IntegrityReport` (parsed from latest report) |
 | GET | `/api/projects` | List all projects with paper counts |
 | POST | `/api/projects` | Create project |
 | GET | `/api/projects/{id}` | Get project with paper_ids |

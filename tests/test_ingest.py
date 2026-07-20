@@ -77,6 +77,34 @@ async def test_ingest_dedup_returns_existing(db, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_ingest_dedup_with_multiple_reports(db, tmp_path):
+    """Dedup must return the latest report, not raise, when a paper has several."""
+    pdf_bytes = _minimal_pdf()
+    sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+
+    existing = Paper(sha256=sha256, title="Existing", word_count=0, extraction_method="native")
+    db.add(existing)
+    db.flush()
+    for score in (50, 90):
+        db.add(AnalysisReport(
+            paper_id=existing.id,
+            report_json="{}",
+            integrity_score=score,
+            integrity_grade="C",
+            analyzer_version="1.0.0",
+        ))
+    db.commit()
+
+    with patch("app.services.references.verify_references", new=AsyncMock(return_value=[])), \
+         patch("app.services.ingest.USE_SEMANTIC", False):
+        result = await ingest_paper(db=db, http=None, pdf_bytes=pdf_bytes,
+                                    filename="test.pdf", pdf_dir=tmp_path / "pdfs")
+
+    assert result.was_duplicate is True
+    assert result.paper_id == existing.id
+
+
+@pytest.mark.asyncio
 async def test_ingest_dedup_no_extra_rows(db, tmp_path):
     """Duplicate ingest must not create any new DB rows."""
     pdf_bytes = _minimal_pdf()
