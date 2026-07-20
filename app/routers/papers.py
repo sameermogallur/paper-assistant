@@ -25,8 +25,12 @@ from app.schemas.models import (
     PaperIngestResponse,
     PaperListItem,
     PaperListResponse,
+    RelatedPapersResponse,
+    SimilarPapersResponse,
 )
 from app.services import ingest as ingest_svc
+from app.services import openalex as openalex_svc
+from app.services.similarity import find_similar_papers
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 logger = logging.getLogger(__name__)
@@ -144,6 +148,39 @@ def list_papers(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/{paper_id}/similar", response_model=SimilarPapersResponse)
+def similar_papers(
+    paper_id: int,
+    top_k: int = Query(5, ge=1, le=50),
+    project_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    _get_paper_or_404(db, paper_id)
+    if project_id is not None:
+        _get_project_or_404(db, project_id)
+    results, reason = find_similar_papers(db, paper_id, top_k=top_k, project_id=project_id)
+    return SimilarPapersResponse(paper_id=paper_id, results=results, reason=reason)
+
+
+@router.get("/{paper_id}/related", response_model=RelatedPapersResponse)
+async def related_papers(
+    request: Request,
+    paper_id: int,
+    limit: int = Query(10, ge=1, le=25),
+    db: Session = Depends(get_db),
+):
+    paper = _get_paper_or_404(db, paper_id)
+    if not paper.doi:
+        return RelatedPapersResponse(paper_id=paper_id, results=[], reason="paper_has_no_doi")
+
+    results, reason = await openalex_svc.fetch_related_works(
+        request.app.state.http, paper.doi, limit=limit
+    )
+    if reason == "openalex_unavailable":
+        raise HTTPException(503, "OpenAlex unavailable")
+    return RelatedPapersResponse(paper_id=paper_id, results=results, reason=reason)
 
 
 @router.get("/{paper_id}", response_model=PaperDetailResponse)

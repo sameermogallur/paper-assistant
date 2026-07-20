@@ -84,6 +84,8 @@ Copy `.env.example` to `.env`:
 | `MAX_PDF_PAGES` | No | `100` | |
 | `MAX_OCR_PAGES` | No | `20` | |
 | `CROSSREF_CONCURRENT_REQUESTS` | No | `3` | Semaphore limit for concurrent Crossref calls |
+| `OPENALEX_MAILTO` | No | `CROSSREF_EMAIL` | Contact email for OpenAlex polite pool |
+| `OPENALEX_CONCURRENT_REQUESTS` | No | `3` | Semaphore limit for concurrent OpenAlex calls |
 | `POPPLER_PATH` | No | — | Windows only: path to poppler `bin/` directory |
 | `ALLOWED_ORIGINS` | No | `*` | Comma-separated CORS origins |
 | `USE_SEMANTIC_MATCHING` | No | `1` | Set to `0` to fall back to difflib `title_similarity()` for citation scoring |
@@ -106,6 +108,8 @@ Base URL: `http://localhost:8000`
 | POST | `/api/papers` | Ingest PDF — SHA256 dedup, persist Paper + Report + References + Embedding; 201 new / 200 duplicate |
 | GET | `/api/papers` | List papers — pagination envelope, optional `project_id` filter, latest report score, `has_embedding` |
 | GET | `/api/papers/{id}` | Paper detail + stored `IntegrityReport` (parsed from latest report) |
+| GET | `/api/papers/{id}/similar` | Cosine similarity over stored SPECTER vectors (`top_k`, optional `project_id` scope) |
+| GET | `/api/papers/{id}/related` | OpenAlex `related_works` (cached 24h, polite `mailto`); 200+`reason` for data conditions, 503 when OpenAlex is down |
 | GET | `/api/projects` | List all projects with paper counts |
 | POST | `/api/projects` | Create project |
 | GET | `/api/projects/{id}` | Get project with paper_ids |

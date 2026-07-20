@@ -10,6 +10,9 @@ MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", 100))
 MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", 20))
 CROSSREF_EMAIL = os.getenv("CROSSREF_EMAIL", "test@example.com")
 CROSSREF_CONCURRENT = int(os.getenv("CROSSREF_CONCURRENT_REQUESTS", 3))
+# One contact email by default; independently overridable for OpenAlex's polite pool
+OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", CROSSREF_EMAIL)
+OPENALEX_CONCURRENT = int(os.getenv("OPENALEX_CONCURRENT_REQUESTS", 3))
 POPPLER_PATH = os.getenv("POPPLER_PATH")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 USE_SEMANTIC = os.getenv("USE_SEMANTIC_MATCHING", "1") == "1"

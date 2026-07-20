@@ -137,6 +137,35 @@ class PaperDetailResponse(PaperListItem):
     report: Optional[IntegrityReport]
 
 
+class SimilarPaperItem(BaseModel):
+    paper_id: int
+    title: Optional[str]
+    year: Optional[int]
+    score: float
+
+
+class SimilarPapersResponse(BaseModel):
+    paper_id: int
+    results: List[SimilarPaperItem]
+    reason: Optional[str] = None
+
+
+class RelatedPaperItem(BaseModel):
+    openalex_id: str
+    title: str
+    authors: List[str] = []
+    year: Optional[int]
+    doi: Optional[str]
+    cited_by_count: Optional[int]
+    url: Optional[str]
+
+
+class RelatedPapersResponse(BaseModel):
+    paper_id: int
+    results: List[RelatedPaperItem]
+    reason: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str
     timestamp: str
