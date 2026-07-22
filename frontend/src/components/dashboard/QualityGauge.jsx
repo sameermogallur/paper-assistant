@@ -1,17 +1,10 @@
 import React from 'react';
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle, Minus } from "lucide-react";
-
-const gradeColors = {
-  A: { bg: 'bg-emerald-500', text: 'text-emerald-500', light: 'bg-emerald-50' },
-  B: { bg: 'bg-blue-500', text: 'text-blue-500', light: 'bg-blue-50' },
-  C: { bg: 'bg-amber-500', text: 'text-amber-500', light: 'bg-amber-50' },
-  D: { bg: 'bg-orange-500', text: 'text-orange-500', light: 'bg-orange-50' },
-  F: { bg: 'bg-red-500', text: 'text-red-500', light: 'bg-red-50' }
-};
+import { GRADE_COLORS } from "@/lib/grades";
 
 export default function QualityGauge({ score = 0, grade = 'C', breakdown = [] }) {
-  const colors = gradeColors[grade] || gradeColors.C;
+  const colors = GRADE_COLORS[grade] || GRADE_COLORS.C;
   const circumference = 2 * Math.PI * 70;
   const strokeDashoffset = circumference - (score / 100) * circumference;
 

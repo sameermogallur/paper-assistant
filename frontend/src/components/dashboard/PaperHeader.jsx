@@ -11,6 +11,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { format } from "date-fns";
+import { gradeBadgeClass } from "@/lib/grades";
 
 export default function PaperHeader({ paper, onBack }) {
   return (
@@ -82,12 +83,7 @@ export default function PaperHeader({ paper, onBack }) {
             {paper?.quality_grade && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-slate-500">Quality Grade</span>
-                <Badge className={`text-lg px-3 py-1 ${
-                  paper.quality_grade === 'A' ? 'bg-emerald-500' :
-                  paper.quality_grade === 'B' ? 'bg-blue-500' :
-                  paper.quality_grade === 'C' ? 'bg-amber-500' :
-                  paper.quality_grade === 'D' ? 'bg-orange-500' : 'bg-red-500'
-                } text-white`}>
+                <Badge className={`text-lg px-3 py-1 ${gradeBadgeClass(paper.quality_grade)} text-white`}>
                   {paper.quality_grade}
                 </Badge>
               </div>

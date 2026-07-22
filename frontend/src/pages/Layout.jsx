@@ -1,10 +1,15 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Sparkles } from 'lucide-react';
 
 export default function Layout({ children }) {
+  const location = useLocation();
+  // Router matches case-insensitively and tolerates trailing slashes; mirror that
+  const path = location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+  const onHome = path === '/' || path === '/home';
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -21,18 +26,35 @@ export default function Layout({ children }) {
           </Link>
           
           <nav className="hidden md:flex items-center gap-6 text-sm text-slate-600">
-            <button 
-              onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-              className="hover:text-slate-900 transition-colors"
+            <Link
+              to="/"
+              className={`hover:text-slate-900 transition-colors ${onHome ? 'text-slate-900 font-medium' : ''}`}
             >
-              Features
-            </button>
-            <button 
-              onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
-              className="hover:text-slate-900 transition-colors"
+              Analyze
+            </Link>
+            <Link
+              to="/library"
+              className={`hover:text-slate-900 transition-colors ${location.pathname.startsWith('/library') ? 'text-slate-900 font-medium' : ''}`}
             >
-              Waitlist
-            </button>
+              Library
+            </Link>
+            {onHome && (
+              <>
+                {/* Anchor targets only exist on the Home landing view */}
+                <button
+                  onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="hover:text-slate-900 transition-colors"
+                >
+                  Features
+                </button>
+                <button
+                  onClick={() => document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="hover:text-slate-900 transition-colors"
+                >
+                  Waitlist
+                </button>
+              </>
+            )}
           </nav>
         </div>
       </header>

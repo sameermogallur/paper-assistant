@@ -1,13 +1,18 @@
 import Layout from "./Layout.jsx";
 
 import Home from "./Home";
+import Library from "./Library";
+import ProjectDetail from "./ProjectDetail";
+import PaperDetail from "./PaperDetail";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
-    
+
     Home: Home,
-    
+
+    Library: Library,
+
 }
 
 function _getCurrentPage(url) {
@@ -27,16 +32,22 @@ function _getCurrentPage(url) {
 function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
-    
+
     return (
         <Layout currentPageName={currentPage}>
-            <Routes>            
-                
+            <Routes>
+
                     <Route path="/" element={<Home />} />
-                
-                
+
+
                 <Route path="/Home" element={<Home />} />
-                
+
+                <Route path="/library" element={<Library />} />
+
+                <Route path="/projects/:id" element={<ProjectDetail />} />
+
+                <Route path="/papers/:id" element={<PaperDetail />} />
+
             </Routes>
         </Layout>
     );

@@ -14,8 +14,9 @@ import {
   BookOpen
 } from "lucide-react";
 import { format } from "date-fns";
+import { gradeBadgeClass } from "@/lib/grades";
 
-export default function ContentHeader({ content, onBack }) {
+export default function ContentHeader({ content, onBack, backLabel = "Back to Upload" }) {
   const isNews = content?.source_type === 'news';
   const isUrl = content?.input_type === 'url';
 
@@ -33,7 +34,7 @@ export default function ContentHeader({ content, onBack }) {
           className="mb-4 -ml-2 text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Upload
+          {backLabel}
         </Button>
 
         {/* Content Info */}
@@ -111,12 +112,7 @@ export default function ContentHeader({ content, onBack }) {
                 <span className="text-sm text-slate-500">
                   {isNews ? 'Trust Grade' : 'Quality Grade'}
                 </span>
-                <Badge className={`text-lg px-3 py-1 ${
-                  content.quality_grade === 'A' ? 'bg-emerald-500' :
-                  content.quality_grade === 'B' ? 'bg-blue-500' :
-                  content.quality_grade === 'C' ? 'bg-amber-500' :
-                  content.quality_grade === 'D' ? 'bg-orange-500' : 'bg-red-500'
-                } text-white`}>
+                <Badge className={`text-lg px-3 py-1 ${gradeBadgeClass(content.quality_grade)} text-white`}>
                   {content.quality_grade}
                 </Badge>
               </div>

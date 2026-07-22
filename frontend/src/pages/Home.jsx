@@ -11,90 +11,9 @@ import AnalysisProgress from "@/components/shared/AnalysisProgress";
 import ContentHeader from "@/components/dashboard/ContentHeader";
 import AnalysisTabs from "@/components/dashboard/AnalysisTabs";
 import NewsAnalysisTabs from "@/components/dashboard/NewsAnalysisTabs";
+import { useQueryClient } from '@tanstack/react-query';
 import { airaApi } from '../api/airaApi';
-
-function generateScoreBreakdown(result) {
-  const breakdown = [];
-
-  const signals = result.integrity_signals || [];
-  
-  // Citations Verified
-  const citationScore = result.references_found > 0 
-    ? Math.round((result.references_verified / result.references_found) * 20) 
-    : 0;
-  breakdown.push({
-    criterion: 'Citations Verified',
-    score: citationScore,
-    maxScore: 20,
-    status: citationScore >= 16 ? 'pass' : citationScore >= 10 ? 'partial' : 'fail'
-  });
-  
-  // Statistical Reporting
-  const hasStats = result.statistics && result.statistics.p_values && result.statistics.p_values.length > 0;
-  const statScore = hasStats ? 12 : 5;
-  breakdown.push({
-    criterion: 'Statistical Reporting',
-    score: statScore,
-    maxScore: 15,
-    status: hasStats ? 'pass' : 'partial'
-  });
-  
-  // Limitations Section
-  const hasLimitations = !signals.some(s => s.toLowerCase().includes('no limitations'));
-  breakdown.push({
-    criterion: 'Limitations Discussed',
-    score: hasLimitations ? 10 : 0,
-    maxScore: 10,
-    status: hasLimitations ? 'pass' : 'fail'
-  });
-  
-  // Ethics Statement
-  const hasEthics = !signals.some(s => s.toLowerCase().includes('no ethics'));
-  breakdown.push({
-    criterion: 'Ethics Statement',
-    score: hasEthics ? 10 : 0,
-    maxScore: 10,
-    status: hasEthics ? 'pass' : 'fail'
-  });
-  
-  // Conflict of Interest
-  const hasCOI = !signals.some(s => s.toLowerCase().includes('conflict of interest'));
-  breakdown.push({
-    criterion: 'Conflict of Interest Disclosed',
-    score: hasCOI ? 10 : 0,
-    maxScore: 10,
-    status: hasCOI ? 'pass' : 'fail'
-  });
-  
-  // Pre-registration (bonus)
-  const hasPreReg = signals.some(s => s.toLowerCase().includes('pre-registered'));
-  breakdown.push({
-    criterion: 'Pre-registration',
-    score: hasPreReg ? 10 : 0,
-    maxScore: 10,
-    status: hasPreReg ? 'pass' : 'partial'
-  });
-  
-  // Open Data (bonus)
-  const hasOpenData = signals.some(s => s.toLowerCase().includes('open data') || s.toLowerCase().includes('data/code'));
-  breakdown.push({
-    criterion: 'Open Data/Code',
-    score: hasOpenData ? 10 : 0,
-    maxScore: 10,
-    status: hasOpenData ? 'pass' : 'partial'
-  });
-  
-  // Replication
-  const hasReplication = signals.some(s => s.toLowerCase().includes('replication'));
-  breakdown.push({
-    criterion: 'Replication Discussed',
-    score: hasReplication ? 5 : 0,
-    maxScore: 5,
-    status: hasReplication ? 'pass' : 'partial'
-  });
-  
-  return breakdown;
-}
+import { buildAnalysisContent } from '../lib/reportTransform';
 
 export default function Home() {
   const [view, setView] = useState('landing');
@@ -103,6 +22,7 @@ export default function Home() {
   const [content, setContent] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);
   const uploadRef = useRef(null);
+  const queryClient = useQueryClient();
 
   const scrollToUpload = () => {
     setView('upload');
@@ -122,75 +42,27 @@ export default function Home() {
     if (pendingFile && type === 'research') {
       setView('analyzing');
       try {
-        const analysisResult = await airaApi.analyzePdf(pendingFile.file);
-        
+        // Ingest: analyzes AND persists to the library (SHA256-deduped)
+        const ingestResult = await airaApi.ingestPdf(pendingFile.file);
+        const analysisResult = ingestResult.report;
+
         // Handle OCR-needed case
-        if (analysisResult.extraction_method === 'failed_needs_ocr') {
+        if (!analysisResult || analysisResult.extraction_method === 'failed_needs_ocr') {
           alert('This PDF appears to be scanned. OCR is not enabled in the hosted demo. Please try a text-based PDF.');
           setView('upload');
           setPendingFile(null);
           return;
         }
-        
-        const content = {
+
+        const content = buildAnalysisContent(analysisResult, {
           title: pendingFile.file.name.replace('.pdf', ''),
-          source_type: 'research',
-          input_type: 'pdf',
-          status: 'analyzed',
-          page_count: analysisResult.pages,
-          word_count: analysisResult.word_count,
-          sections_detected: analysisResult.sections_detected,
-          quality_score: analysisResult.integrity_score,
-          quality_grade: analysisResult.integrity_grade,
-          citations: analysisResult.citations.map(c => ({
-            text: c.raw_text,
-            title: c.title || c.normalized,
-            authors: c.authors ? c.authors.join(', ') : '',
-            doi: c.doi || '',
-            verified: c.status === 'verified',
-            confidence: c.confidence
-          })),
-          statistics: [
-            ...analysisResult.statistics.p_values.map(p => ({
-              type: 'p-value',
-              value: p,
-              context: p.includes('0.05') || p.includes('0.04') ? 'Near significance threshold' : null,
-              flag: (p.includes('0.05') || p.includes('0.04') || p.includes('0.06')) ? 'Borderline significance' : null
-            })),
-            ...analysisResult.statistics.sample_sizes.map(n => ({
-              type: 'sample_size',
-              value: n,
-              context: null,
-              flag: parseInt(n.match(/\d+/)?.[0] || '0') < 30 ? 'Small sample' : null
-            })),
-            ...analysisResult.statistics.effect_sizes.map(e => ({
-              type: 'effect_size',
-              value: e,
-              context: null,
-              flag: null
-            })),
-            ...analysisResult.statistics.cis.map(ci => ({
-              type: 'confidence_interval',
-              value: ci,
-              context: null,
-              flag: null
-            }))
-          ],
-          red_flags: analysisResult.statistics.red_flags.filter(f => !f.startsWith('✅')),
-          good_practices: analysisResult.statistics.red_flags.filter(f => f.startsWith('✅')),
-          score_breakdown: generateScoreBreakdown(analysisResult),
-          summary: {
-            key_findings: [
-              analysisResult.references_verified + ' of ' + analysisResult.references_found + ' citations verified',
-              analysisResult.statistics.p_values.length + ' p-values extracted',
-              analysisResult.intext_total + ' in-text citations found'
-            ]
-          },
-          _raw: analysisResult
-        };
-        
+          paper_id: ingestResult.paper_id,
+        });
+
         setContent(content);
         setPendingFile(null);
+        // The library list is cached; let it know a paper was just added
+        queryClient.invalidateQueries({ queryKey: ['papers'] });
       } catch (error) {
         console.error('Analysis failed:', error);
         alert('Analysis failed: ' + error.message);
