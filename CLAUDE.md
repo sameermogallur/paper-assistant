@@ -2,6 +2,8 @@
 
 AIRA analyzes research papers for integrity and reproducibility signals. Upload a PDF and it extracts text (with OCR fallback via Tesseract + Poppler), verifies every citation against the Crossref database with confidence scoring, extracts statistical indicators (p-values, sample sizes, effect sizes, confidence intervals), detects in-text citation markers, and returns a structured `IntegrityReport` with a heuristic integrity score (0–100, letter-grade A–F) based on open-science transparency markers.
 
+> **Product strategy:** the reframed product vision, market-research question list, UI-redesign scope, and rescoped roadmap live in [VISION.md](VISION.md) (2026-07-22). This file stays focused on technical architecture.
+
 ## Architecture
 
 ```
@@ -159,6 +161,10 @@ The following are already wired into the frontend as disabled/placeholder elemen
 | Paper library with search | `app_v2.py:563` | |
 
 ## Long-Term Vision / Roadmap
+
+> **Superseded 2026-07-22:** this section is historical. [VISION.md](VISION.md) now governs
+> product strategy and sequencing — the Week 3–5 plan below is paused (Week 3 Discovery UI
+> explicitly skipped). The tactical "Roadmap / Backlog" section above remains valid.
 
 > Added 2026-07-09 after a planning session. This section is the product trajectory; the
 > "Roadmap / Backlog" section above remains the near-term tactical list. Full plan detail
