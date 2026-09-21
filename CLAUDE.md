@@ -109,6 +109,8 @@ Copy `.env.example` to `.env`:
 | `POPPLER_PATH` | No | — | Windows only: path to poppler `bin/` directory |
 | `ALLOWED_ORIGINS` | No | localhost 5173/3000/8501 | Comma-separated CORS origins; `*` allowed but disables credentials (browsers reject wildcard+credentials) |
 | `USE_SEMANTIC_MATCHING` | No | `1` | Set to `0` to fall back to difflib `title_similarity()` for citation scoring |
+| `DATABASE_URL` | No | `sqlite:///./data/aira.db` | SQLAlchemy URL. The parent directory of a SQLite file is created automatically at import (`ensure_database_dir()` in `app/db/database.py`), so a fresh clone needs no manual `mkdir data` |
+| `VITE_API_URL` | No | `http://localhost:8000` | **Frontend only** — base URL the React app calls (`frontend/src/api/airaApi.js`). Read by Vite from `frontend/.env`, not the repo-root `.env` |
 
 ## API Endpoints
 

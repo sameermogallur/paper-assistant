@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-from app.db.database import DATABASE_URL
+from app.db.database import DATABASE_URL, ensure_database_dir
 from app.db import models  # noqa: F401 — registers all ORM models with Base
 from app.db.database import Base
 
@@ -14,6 +14,11 @@ if config.config_file_name is not None:
 
 # Use DATABASE_URL from app config (env var or default)
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+# A fresh clone has no data/ directory (it is gitignored), and SQLite will not
+# create one. Called explicitly here rather than relying on the import-time call
+# in app.db.database, so migrations stay correct regardless of import order.
+ensure_database_dir(DATABASE_URL)
 
 target_metadata = Base.metadata
 
