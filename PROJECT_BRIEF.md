@@ -42,8 +42,7 @@ roles; the goal is a polished, deployable product.
 | Backend tests | 89, all passing |
 | API endpoints / database tables | 21 / 6 (42 of 42 API checks passed tonight) |
 | Frontend | builds and type-checks; ESLint shows 489 problems, mostly style (not in CI) |
-| Upload time | ~4–11 s per paper, almost all of it waiting on Crossref; only the first 20 references are checked |
-| Citation labels | verified at ≥ 75% confidence, suspicious at ≥ 45% |
+| Upload time | ~4–11 s per paper (mostly waiting on Crossref); first 20 references checked |
 | Analyzer version | 1.0.1 (bumped tonight because the score rules changed) |
 | Security advisories | Python: 160 across 14 packages (103 fixable without major upgrades); npm: 14 packages (1 critical) |
 | Hosting estimate | ~4 GB RAM server, about $20–40/month, driven by SPECTER |
@@ -81,8 +80,6 @@ roles; the goal is a polished, deployable product.
 3. **M3 — read-only public demo (2–3 sessions):** verified Docker build, curated open-access
    papers, hosting, README screenshots.
 
-## Dev machine
-WSL2 Ubuntu 26.04. Python 3.11 lives in a `uv`-made `.venv` with no pip:
-`uv pip install -r requirements-dev.lock.txt`, never `uv pip sync`. Node 24, Tesseract and
-Poppler are installed; there's no Docker. More: `CLAUDE.md` (technical), `ARCHITECTURE.md`
-(how it fits together), `VISION.md` (strategy), `frontend/DESIGN.md` (design).
+**Dev machine:** WSL2 Ubuntu 26.04; Python 3.11 in a uv-made `.venv` with no pip (use
+`uv pip install -r requirements-dev.lock.txt`, never `uv pip sync`); Node 24; no Docker.
+More in `CLAUDE.md`, `ARCHITECTURE.md`, `VISION.md` and `frontend/DESIGN.md`.
