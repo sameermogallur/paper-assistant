@@ -27,25 +27,27 @@ export default function CitationTable({ citations = [] }) {
     citation.authors?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Bucket by the backend's status (verified >= 0.75, suspicious >= 0.45),
+  // never by re-deriving it from confidence with different cutoffs.
   const getStatusIcon = (citation) => {
-    if (citation.verified) {
+    if (citation.status === 'verified') {
       return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
     }
-    if (citation.confidence > 0.5) {
+    if (citation.status === 'suspicious') {
       return <AlertCircle className="w-5 h-5 text-amber-500" />;
     }
     return <XCircle className="w-5 h-5 text-red-500" />;
   };
 
   const getStatusBadge = (citation) => {
-    if (citation.verified) {
+    if (citation.status === 'verified') {
       return (
         <Badge className="bg-emerald-100 text-emerald-700 border-0">
           Verified
         </Badge>
       );
     }
-    if (citation.confidence > 0.5) {
+    if (citation.status === 'suspicious') {
       return (
         <Badge className="bg-amber-100 text-amber-700 border-0">
           Partial Match
@@ -59,9 +61,9 @@ export default function CitationTable({ citations = [] }) {
     );
   };
 
-  const verifiedCount = citations.filter(c => c.verified).length;
-  const partialCount = citations.filter(c => !c.verified && c.confidence > 0.5).length;
-  const unverifiedCount = citations.filter(c => !c.verified && c.confidence <= 0.5).length;
+  const verifiedCount = citations.filter(c => c.status === 'verified').length;
+  const partialCount = citations.filter(c => c.status === 'suspicious').length;
+  const unverifiedCount = citations.filter(c => c.status === 'not_found').length;
 
   return (
     <div className="space-y-6">
@@ -162,8 +164,8 @@ export default function CitationTable({ citations = [] }) {
                       <div className="w-16 h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div 
                           className={`h-full rounded-full ${
-                            citation.confidence >= 0.8 ? 'bg-emerald-500' :
-                            citation.confidence >= 0.5 ? 'bg-amber-500' : 'bg-red-500'
+                            citation.status === 'verified' ? 'bg-emerald-500' :
+                            citation.status === 'suspicious' ? 'bg-amber-500' : 'bg-red-500'
                           }`}
                           style={{ width: `${(citation.confidence || 0) * 100}%` }}
                         />

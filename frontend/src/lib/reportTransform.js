@@ -104,6 +104,7 @@ export function buildAnalysisContent(report, meta = {}) {
       authors: c.authors ? c.authors.join(', ') : '',
       doi: c.doi || '',
       verified: c.status === 'verified',
+      status: c.status,
       confidence: c.confidence
     })),
     statistics: [
