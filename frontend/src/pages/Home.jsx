@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
+import { Loader2 } from "lucide-react";
 import HeroSection from "@/components/landing/HeroSection";
 import FeatureGrid from "@/components/landing/FeatureGrid";
 import WaitlistSection from "@/components/landing/WaitlistSection";
@@ -395,6 +396,26 @@ export default function Home() {
                 Analyzing Your {content?.source_type === 'news' || contentType === 'news' ? 'Article' : 'Paper'}
               </h2>
               <AnalysisProgress onComplete={handleAnalysisComplete} />
+            </div>
+          </motion.div>
+        )}
+
+        {/* The progress animation runs on a fixed timer; if the analysis
+            outlasts it, say so instead of rendering an empty page. */}
+        {view === 'dashboard' && !content && (
+          <motion.div
+            key="waiting"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="min-h-screen flex items-center justify-center py-20 px-6"
+          >
+            <div className="w-full max-w-lg text-center">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Still analyzing…</h2>
+              <p className="text-slate-600">
+                Checking references against Crossref can take a minute for long reference lists.
+              </p>
             </div>
           </motion.div>
         )}
