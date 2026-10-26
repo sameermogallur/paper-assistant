@@ -16,8 +16,10 @@ async def calculate_truthiness(text: str, field: Optional[str] = None) -> Truthi
     has_no_ethics = any("No ethics" in f for f in flags)
     is_preregistered = any("pre-registered" in f.lower() for f in flags)
     has_power_analysis = any("Power analysis" in f for f in flags)
+    # Stem match: statistics.py emits "Data/code availability statement",
+    # which contains "availab" but not the word "available".
     has_open_data = any(
-        ("data" in f.lower() and "available" in f.lower())
+        ("data" in f.lower() and "availab" in f.lower())
         or "github.com" in f.lower()
         or "osf.io" in f.lower()
         for f in flags

@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from app.config import ANALYZER_VERSION
 from app.db.database import Base
 from app.db.models import AnalysisReport, Embedding, Paper, Reference
 from app.schemas.models import Citation
@@ -166,7 +167,7 @@ async def test_ingest_new_paper_creates_report_row(db, tmp_path):
         select(AnalysisReport).where(AnalysisReport.paper_id == result.paper_id)
     ).scalars().all()
     assert len(reports) == 1
-    assert reports[0].analyzer_version == "1.0.0"
+    assert reports[0].analyzer_version == ANALYZER_VERSION
     assert reports[0].integrity_grade in ("A", "B", "C", "D", "F", "N/A")
 
 

@@ -27,7 +27,7 @@ ALLOWED_ORIGINS = [
 ]
 USE_SEMANTIC = os.getenv("USE_SEMANTIC_MATCHING", "1") == "1"
 
-ANALYZER_VERSION = "1.0.0"
+ANALYZER_VERSION = "1.0.1"
 
 import numpy as np
 EMBEDDING_DTYPE = np.float32

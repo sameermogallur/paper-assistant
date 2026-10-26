@@ -234,12 +234,13 @@ pip install -r requirements-dev.lock.txt
 pytest tests/ -v
 ```
 
-**88 tests across 8 files:**
+**89 tests across 9 files:**
 
 | File | Tests |
 |------|-------|
 | `test_backend.py` | 17 |
 | `test_ingest.py` | 7 |
+| `test_integrity.py` | 1 |
 | `test_models.py` | 8 |
 | `test_papers_read.py` | 16 |
 | `test_projects.py` | 19 |
