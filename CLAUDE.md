@@ -18,12 +18,15 @@ User → Streamlit app_v2.py     port 8501 ──┼──▶ FastAPI app/ packa
 | File | Role |
 |------|------|
 | `README.md` | Public-facing project README (description, features, architecture, setup, API reference, testing, design decisions, limitations) — the front door for external readers |
+| `ARCHITECTURE.md` | Beginner-friendly map of the parts, a glossary, and one upload traced from click → API → database → back (2026-10-26) |
+| `GAP_ANALYSIS.md`, `QUESTIONS.md` | Vision-vs-today status, A0-vs-frontend, competitor scan, next milestones; and the product decisions the vision docs leave open (2026-10-26) |
+| `HEALTH_CHECK.md`, `PROJECT_BRIEF.md` | Raw results of the 2026-10-26 health check; one-page plain-language brief for Claude project knowledge |
 | `backend.py` | 3-line shim — `from app.main import app`; entry point for uvicorn and CI |
 | `app/` | FastAPI package — `main.py` (lifespan + CORS), `config.py` (env vars + constants), `routers/` (health, pdf, analysis, papers, projects), `services/` (pdf, references, citations, statistics, integrity, embeddings, ingest), `schemas/models.py`, `utils/helpers.py`, `db/` (engine + 6 ORM models) |
 | `app/db/models.py` | SQLAlchemy ORM: Paper, AnalysisReport, Reference, Project, ProjectPaper, Embedding |
 | `frontend/` | React + Vite + Tailwind + shadcn/ui — primary UI |
-| `app_v2.py` | Legacy Streamlit frontend — calls FastAPI backend; still functional, secondary path |
-| `app_legacy.py` | Original standalone Streamlit app (pre-API architecture, OpenAI-dependent, no Crossref, no OCR). Superseded by `app_v2.py` and the React frontend; kept for reference. |
+| `app_v2.py` | Legacy Streamlit frontend — calls FastAPI backend; still functional (re-checked 2026-10-26, incl. graceful no-key AI tab), secondary path |
+| `app_legacy.py` | Original standalone Streamlit app (pre-API architecture, OpenAI-dependent, no Crossref, no OCR). Superseded by `app_v2.py` and the React frontend; kept for reference. **Crashes on startup** (imports `PyPDF2`, which is not installed). |
 
 ## Prerequisites (one-time)
 
@@ -53,12 +56,38 @@ pip-compile --strip-extras --no-header -o requirements.lock.txt requirements.txt
 pip-compile --strip-extras --no-header -o requirements-dev.lock.txt requirements.txt requirements-dev.txt
 ```
 
+#### This machine: WSL2 Ubuntu 26.04 (verified 2026-10-26)
+
+System `python3` is 3.14 and there is no `python3.11` on PATH; Python 3.11 comes from
+[uv](https://docs.astral.sh/uv/), and the uv-built `.venv` has **no pip**. Keep the repo on the
+Linux filesystem (`~/projects/...`, not `/mnt/c/...`) so file watching stays fast; the Windows
+browser reaches `http://localhost:5173` through WSL's localhost forwarding.
+
+```bash
+uv venv --python 3.11 .venv          # only when (re)creating the venv
+source .venv/bin/activate
+uv pip install -r requirements-dev.lock.txt   # app + test deps
+```
+
+- **Don't use `uv pip sync` here.** The lockfiles were compiled off-Linux and omit torch's
+  Linux-only CUDA packages (`nvidia-*`, `triton`). `sync` removes anything not in the lock, so it
+  would uninstall 22 packages and break `import torch`. `uv pip install` is additive (what CI's
+  `pip install` does too).
+- **Re-locking:** `pip-compile` isn't installed; run it through uv, pinned to 3.11 (on 3.14 it
+  tries to build Pillow 10.3 from source and fails):
+  `uvx --python 3.11 --from pip-tools pip-compile --strip-extras --no-header -o requirements.lock.txt requirements.txt`.
+  **Warning:** a fresh resolve on Linux is not a no-op. It adds 24 CUDA/`triton` pins (which the
+  CPU-only Docker image would then install) and upgrades loosely pinned deps, including
+  `sentence-transformers` 5.6 → 6.2 (the SPECTER runtime) and `huggingface-hub` 1 → 2. Re-lock
+  deliberately, not as a side effect.
+
 ### Backend
 
 ```bash
 source .venv/bin/activate
+alembic upgrade head    # creates/upgrades data/aira.db; needed on a fresh clone and after new migrations
 uvicorn backend:app --reload --port 8000
-# Verify: curl http://localhost:8000/healthz
+# Verify: curl http://localhost:8000/healthz   (startup takes ~5–10 s while SPECTER loads)
 ```
 
 ### React frontend (primary)
@@ -67,6 +96,9 @@ uvicorn backend:app --reload --port 8000
 cd frontend
 npm install
 npm run dev        # → http://localhost:5173
+npm run build      # production bundle (passes; one >500 kB chunk warning)
+npm run typecheck  # tsc --noEmit — only .ts/.tsx files are checked
+npm run lint       # ~490 pre-existing problems, mostly react/prop-types in the shadcn kit; not in CI
 ```
 
 ### Streamlit frontend (legacy)
@@ -79,11 +111,15 @@ streamlit run app_v2.py    # → http://localhost:8501
 ### Tests
 
 ```bash
-pip install -r requirements-dev.txt
-pytest tests/ -v
+pip install -r requirements-dev.lock.txt   # on this machine: uv pip install -r requirements-dev.lock.txt
+pytest tests/ -v                           # 89 tests, ~15 s; Crossref/OpenAlex are mocked, SPECTER loads from cache
 ```
 
+The frontend has no unit tests; `npm run build` / `typecheck` / `lint` (above) are its only checks, and CI runs none of them.
+
 ### Docker (backend only)
+
+Not available on the current dev machine (WSL2), so the Docker setup is still unverified.
 
 ```bash
 docker compose up --build
@@ -99,7 +135,8 @@ Copy `.env.example` to `.env`:
 | Variable | Required | Default | Notes |
 |----------|----------|---------|-------|
 | `CROSSREF_EMAIL` | **Yes** | `test@example.com` | Sent in Crossref User-Agent header for API politeness |
-| `OPENAI_API_KEY` | No | — | AI summary in `app_v2.py` only; `backend.py` does not use it |
+| `OPENAI_API_KEY` | No | — | AI summary in `app_v2.py` only; `backend.py` does not use it. Kept blank in the local `.env` (the old key was revoked 2026-10-26) |
+| `API_BASE` | No | `http://localhost:8000` | **`app_v2.py` only** — where the Streamlit app finds the FastAPI backend |
 | `MAX_PDF_SIZE_MB` | No | `10` | |
 | `MAX_PDF_PAGES` | No | `100` | |
 | `MAX_OCR_PAGES` | No | `20` | |
@@ -157,10 +194,11 @@ Base URL: `http://localhost:8000`
 - **`extract_title_from_ref()` fix** (`app/utils/helpers.py`) — old regex captured the author list (everything before the first period) instead of the paper title. New function handles APA-style `(YEAR). Title.` and Vancouver-style `Author. Title. Journal.` patterns.
 - **SPECTER semantic embeddings** for citation matching — `app/services/embeddings.py`; replaced `difflib.SequenceMatcher` in `verify_references()` with `allenai-specter` (sentence-transformers). Encodes all Crossref candidates for a reference in a single batched forward pass. Controllable via `USE_SEMANTIC_MATCHING` env var (default `1`). Old `title_similarity()` kept as fallback. Model loads at startup via lifespan hook.
 - **Week 1 Foundation** — package restructure into `app/`; SQLAlchemy 6-table schema + Alembic initial migration; `POST /api/papers` ingest pipeline (SHA256 dedup, PDF storage, Paper/Report/Reference/Embedding persistence; 768-dim SPECTER vector confirmed in DB); projects CRUD (7 endpoints). 50 tests green.
-- **Track A / A0 artifacts (2026-07-22, awaiting owner checkpoint — do not start A1 until reviewed)** — `frontend/DESIGN.md` (references + direction + open questions), semantic status/grade tokens (CSS vars light+dark, Tailwind-mapped), ThemeProvider active (default light), TypeScript scaffold (strict tsconfig, `npm run typecheck`), standalone dev routes `/styleguide` (live tokens) and `/styleguide/paper` (the one mocked screen). Production pages untouched.
+- **Track A / A0 artifacts (2026-07-22, awaiting owner checkpoint — do not start A1 until reviewed; still pending as of 2026-10-26)** — `frontend/DESIGN.md` (references + direction + open questions), semantic status/grade tokens (CSS vars light+dark, Tailwind-mapped), ThemeProvider active (default light), TypeScript scaffold (strict tsconfig, `npm run typecheck`), standalone dev routes `/styleguide` (live tokens) and `/styleguide/paper` (the one mocked screen). Production pages untouched.
 - **Pre-gate hardening (2026-07-22, VISION.md §3 shortlist)** — CORS defaults to explicit local origins (wildcard now disables credentials); pip-tools lockfiles pinned to the tested venv + dependabot (pip/npm/actions) + CI installs from lock; backend Dockerfile + compose (CPU torch, Alembic migrate on start, single `./data` mount — **not build-verified: no Docker on the dev machine**).
 - **SPECTER encode moved off the event loop** — `model.encode()` calls in `app/services/ingest.py` (`_try_store_embedding`, now async) and `app/services/references.py` (`_title_sims` call sites) run via `asyncio.to_thread`; the DB session never crosses the thread boundary. Concurrency stays bounded by `CROSSREF_SEMAPHORE` on the verification path.
 - **Week 2 Library UI + discovery backend** — paper read endpoints (`GET /api/papers` list with pagination envelope + latest-report join, `GET /api/papers/{id}` detail with parsed stored report); ingest metadata enrichment (title + DOI, see backlog note); `/similar` (cosine over stored SPECTER vectors) and `/related` (OpenAlex, cached, semaphore + retry mirroring the Crossref client); React Query frontend with `/library`, `/projects/:id`, `/papers/:id` reusing the dashboard components via the extracted `reportTransform.js`; **upload flow now ingests** (`POST /api/papers`) instead of the stateless `/api/analyze_pdf`, so analyzed papers persist to the library. Also fixed en route: the reference-verification DOI regex was broken (never matched — DOI branch was dead code) and the resurrected fast path is now guarded by title agreement. 88 tests green.
+- **Foundation pass (2026-10-26, branch `foundation`)** — end-to-end health check (API, real UI in headless Chromium, Streamlit, dependency audit; results in `HEALTH_CHECK.md`) plus clear-cut fixes: open-data/code bonus never fired (`integrity.py` matched "available", the flag says "availability"; `ANALYZER_VERSION` → 1.0.1), citation table re-derived status with its own 0.5 cutoff, blank page when analysis outlasts the ~10 s progress animation, 🚩 red flag rendered as "�" (regex without `u` flag), corrupted `.env.example` line, Base44 boilerplate frontend README. New docs: `ARCHITECTURE.md`, `GAP_ANALYSIS.md`, `QUESTIONS.md`, `PROJECT_BRIEF.md`. 89 tests green.
 
 ### Prioritized backlog (assessed 2026-08-03)
 
@@ -173,6 +211,19 @@ old two-bullet "Planned next" (the title-heuristic and picker items are folded i
 > path is guarded by title agreement (`app/services/references.py:96-106`) and is exercised
 > by tests (`tests/test_references.py::test_doi_match_with_title_agreement_is_verified` and
 > `::test_wrong_but_resolvable_doi_is_not_verified`).
+>
+> **Correction 2026-10-26 — re-raise this, but only for the default config:** the guard holds
+> with `USE_SEMANTIC_MATCHING=0` (difflib), and all three DOI tests patch `USE_SEMANTIC=False`.
+> With SPECTER on (the default), unrelated titles still score ~0.5–0.9 similarity, so the same
+> "wrong but resolvable DOI" case returns **verified (0.79)**, and a live fabricated reference
+> carrying a real DOI verified at 0.91. Fabricated references *without* a DOI also verify
+> (0.75–0.76). The thresholds were never recalibrated for SPECTER. Now the top correctness item
+> — see `GAP_ANALYSIS.md`.
+>
+> **Re-checked 2026-10-26:** rows 1–13 below are all still open. Row 4's "AI Summary" mislabel
+> also appears as a "Generating AI Summary" step in the upload progress animation
+> (`frontend/src/components/shared/AnalysisProgress.jsx:17`). New findings from the health
+> check are ranked in `GAP_ANALYSIS.md` rather than spliced into this table.
 
 | # | Item | Type | Effort | What it buys (and rabbit-hole warnings) |
 |---|------|------|--------|------------------------------------------|
