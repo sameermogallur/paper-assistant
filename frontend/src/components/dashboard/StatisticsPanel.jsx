@@ -56,7 +56,7 @@ export default function StatisticsPanel({ statistics = [], redFlags = [], goodPr
                 className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg"
               >
                 <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <span className="text-amber-800">{flag.replace(/^[❌⚠️🚩]\s*/, '')}</span>
+                <span className="text-amber-800">{flag.replace(/^(?:❌|⚠️?|🚩)\s*/u, '')}</span>
               </div>
             ))}
           </div>
